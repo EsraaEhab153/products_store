@@ -1,8 +1,10 @@
 package com.example.jsonparsingdemo;
 
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.renderscript.ScriptGroup;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.RatingBar;
@@ -20,6 +22,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -75,66 +78,114 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        class GetProducts extends AsyncTask<Void, Void, Void> {
 
-            @Override
-            protected void onPreExecute() {
-                super.onPreExecute();
-                Toast.makeText(MainActivity.this, "Json Data Downloading..", Toast.LENGTH_LONG).show();
-
-            }
-
-            @Override
-            protected Void doInBackground(Void... voids) {
-                HttpRequestHandler httpRequestHandler = new HttpRequestHandler();
-                String url = "https://dummyjson.com/products";
-                String jsonStr = httpRequestHandler.getHttpsRequest(url);
-
-                if (jsonStr != null) {
-                    try {
-                        JSONObject jsonObj = new JSONObject(jsonStr);
-                        JSONArray products = jsonObj.getJSONArray("products");
-
-                        for (int i = 0; i < products.length(); i++) {
-
-                            JSONObject p = products.getJSONObject(i);
-
-                            String title = p.getString("title");
-                            double price = p.getDouble("price");
-                            String brand = p.optString("brand", "No Brand");
-                            String description = p.getString("description");
-                            float rating = (float) p.getDouble("rating");
-                            String imageUrl = p.getString("thumbnail");
-
-                            Product product = new Product(title, price, brand, description, rating, imageUrl);
-
-                            productList.add(product);
-                        }
-                        return null;
-                    } catch (JSONException e) {
-                        throw new RuntimeException(e);
-                    }
-
-                }
-                return null;
-            }
-
-            protected void onPostExecute(Void unused) {
-                if (!productList.isEmpty()) {
-                    currentIndex = 0;
-                    showProduct(currentIndex);
-                }
-            }
-        }
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
         new GetProducts().execute();
+
     }
 
+    class GetProducts extends AsyncTask<Void, Void, Void> {
 
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            Toast.makeText(MainActivity.this, "Json Data Downloading..", Toast.LENGTH_LONG).show();
+
+        }
+
+        @Override
+        protected Void doInBackground(Void... voids) {
+            HttpRequestHandler httpRequestHandler = new HttpRequestHandler();
+            String url = "https://dummyjson.com/products";
+            String jsonStr = httpRequestHandler.getHttpsRequest(url);
+
+            if (jsonStr != null) {
+                try {
+                    JSONObject jsonObj = new JSONObject(jsonStr);
+                    JSONArray products = jsonObj.getJSONArray("products");
+
+                    for (int i = 0; i < products.length(); i++) {
+
+                        JSONObject p = products.getJSONObject(i);
+
+                        String title = p.getString("title");
+                        double price = p.getDouble("price");
+                        String brand = p.optString("brand", "No Brand");
+                        String description = p.getString("description");
+                        float rating = (float) p.getDouble("rating");
+                        String imageUrl = p.getString("thumbnail");
+
+                        Product product = new Product(title, price, brand, description, rating, imageUrl);
+
+                        productList.add(product);
+                    }
+                    return null;
+                } catch (JSONException e) {
+                    throw new RuntimeException(e);
+                }
+
+            }
+            return null;
+        }
+
+        protected void onPostExecute(Void unused) {
+            if (!productList.isEmpty()) {
+                currentIndex = 0;
+                showProduct(currentIndex);
+            }
+        }
+    }
+
+    class DownloadImageFromJson extends AsyncTask<String , Void, Bitmap>{
+
+
+        @Override
+        protected Bitmap doInBackground(String... urls) {
+            Bitmap result = null;
+            publishProgress();
+            try {
+                result = download(urls[0]);
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            }
+            return result;
+        }
+
+        @Override
+        protected void onProgressUpdate(Void... values) {
+            super.onProgressUpdate(values);
+            Toast.makeText(MainActivity.this,"image Downloading ...",Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        protected void onPostExecute(Bitmap bitmap) {
+            super.onPostExecute(bitmap);
+            productImage.setImageBitmap(bitmap);
+        }
+    }
+    Bitmap download(String url) throws MalformedURLException {
+        Bitmap result = null;
+        URL urlObj;
+        HttpsURLConnection connection;
+        InputStream inputStream = null;
+
+        try {
+            urlObj = new URL(url);
+            connection = (HttpsURLConnection) urlObj.openConnection();
+            connection.connect();
+            if(connection.getResponseCode()== HttpsURLConnection.HTTP_OK){
+              inputStream = connection.getInputStream();
+            }
+            result = BitmapFactory.decodeStream(inputStream);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+         return result;
+    }
     void showProduct(int index){
         Product product = productList.get(index);
         tvTitle.setText(product.getTitle());
@@ -142,6 +193,7 @@ public class MainActivity extends AppCompatActivity {
         tvDescription.setText(product.getDescription());
         tvPrice.setText(Double.toString(product.getPrice()));
         productRating.setRating(product.getRating());
+        new DownloadImageFromJson().execute(product.getImageUrl());
     }
 
     class HttpRequestHandler {
